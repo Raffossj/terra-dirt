@@ -4,4 +4,3 @@ psycopg2-binary==2.9.9
 requests==2.31.0
 discord.py==2.6.4
 aiohttp==3.9.1
-asyncpg==0.29.0
