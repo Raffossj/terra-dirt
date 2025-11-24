@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-import psycopg2
+import psycopg2-binary
 from psycopg2.extras import RealDictCursor
 import os
 from datetime import datetime, timedelta
