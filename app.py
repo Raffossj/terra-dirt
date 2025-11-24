@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import pg8000.native
 import os
 from datetime import datetime, timedelta
 import hashlib
@@ -14,8 +13,22 @@ DISCORD_CHANNEL_ID = 1442158195824001116
 def get_db_connection():
     """Get direct database connection"""
     db_url = os.environ.get('DATABASE_URL')
-    conn = psycopg2.connect(db_url)
-    return conn
+    # Parse DATABASE_URL for pg8000
+    # Format: postgresql://user:password@host:port/database
+    import re
+    match = re.match(r'postgresql://(.+):(.+)@(.+):(\d+)/(.+)', db_url)
+    if match:
+        user, password, host, port, database = match.groups()
+        conn = pg8000.native.connect(
+            user=user,
+            password=password,
+            host=host,
+            port=int(port),
+            database=database,
+            ssl_context=True
+        )
+        return conn
+    raise Exception("Invalid DATABASE_URL format")
 
 def hash_hwid(hwid):
     if hwid:
@@ -26,7 +39,7 @@ def validate_key_sync(key_code, discord_id=None, hwid=None):
     """Synchronous key validation - FAST"""
     try:
         conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         
         # Get key data
         cur.execute('''
@@ -36,12 +49,16 @@ def validate_key_sync(key_code, discord_id=None, hwid=None):
             WHERE k.key_code = %s
         ''', (key_code,))
         
-        key_data = cur.fetchone()
+        result = cur.fetchone()
         
-        if not key_data:
+        if not result:
             cur.close()
             conn.close()
             return {'valid': False, 'code': 'KEY_NOT_FOUND', 'message': 'Invalid key'}
+        
+        # Convert tuple to dict
+        columns = [desc[0] for desc in cur.description]
+        key_data = dict(zip(columns, result))
         
         # Check if inactive
         if not key_data['is_active']:
